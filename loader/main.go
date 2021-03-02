@@ -62,13 +62,15 @@ func HandleRequest(cfg *Config) HandlerFunc {
 			sess := session.New(cfg.AWSConfig())
 			s3Client := s3.New(sess)
 
+			bucket, key := &record.S3.Bucket.Name, &record.S3.Object.Key
 			output, err := s3Client.GetObject(&s3.GetObjectInput{
-				Bucket: &record.S3.Bucket.Name,
-				Key:    &record.S3.Object.Key,
+				Bucket: bucket,
+				Key:    key,
 			})
 			if err != nil {
 				return err
 			}
+			log.Printf("Processing File; bucket: %s; key: %s\n", *bucket, *key)
 
 			// Parse CSV Rows
 			reader := csv.NewReader(output.Body)
