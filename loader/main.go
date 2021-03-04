@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -162,6 +163,12 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				)
 			} else {
 				fmt.Printf("\n\t*** Error; Status Code: %d ***\n", resp.StatusCode)
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					log.Println("Error reading response body")
+					log.Fatalln(err.Error())
+				}
+				log.Fatalf("%s\n", body)
 			}
 		}
 		return nil
