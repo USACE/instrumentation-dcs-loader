@@ -123,7 +123,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 					break
 				}
 				if err != nil {
-					log.Fatal(err.Error())
+					return err
 				}
 				rows = append(rows, row)
 			}
@@ -135,17 +135,17 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				// Timeseries ID
 				tsid, err := uuid.Parse(r[0])
 				if err != nil {
-					log.Fatal(err.Error())
+					return err
 				}
 				// Time
 				t, err := time.Parse(time.RFC3339, r[1])
 				if err != nil {
-					log.Fatal(err.Error())
+					return err
 				}
 				// Value
 				v, err := strconv.ParseFloat(r[2], 32)
 				if err != nil {
-					log.Fatal(err.Error())
+					return err
 				}
 
 				// Create New TimeseriesID: MeasurementCollection Entry in Map (As Necessary)
@@ -176,14 +176,14 @@ func HandleRequest(cfg *Config) HandlerFunc {
 			// Body of Request
 			requestBodyBytes, err := json.Marshal(cc)
 			if err != nil {
-				log.Fatal(err.Error())
+				return err
 			}
 			requestBody := bytes.NewReader(requestBodyBytes)
 
 			// Build Request
 			r, err := http.NewRequest("POST", fmt.Sprintf("%s?key=%s", cfg.PostURL, cfg.APIKey), requestBody)
 			if err != nil {
-				log.Fatal(err.Error())
+				return err
 			}
 
 			// Add Headers
@@ -195,8 +195,10 @@ func HandleRequest(cfg *Config) HandlerFunc {
 			// POST
 			resp, err := CLIENT.Do(r)
 			if err != nil {
-				log.Fatalf("\n\t*** Error; %s\n", err.Error())
+				log.Printf("\n\t*** Error; %s\n", err.Error())
+				return err
 			}
+
 			if resp.StatusCode == 201 {
 				fmt.Printf(
 					"\n\tSUCCESS; POST %d measurements across %d timeseries in %f seconds\n",
@@ -207,9 +209,9 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				body, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
 					fmt.Println("Error reading response body")
-					log.Fatalln(err.Error())
+					return err
 				}
-				log.Fatalf("%s\n", body)
+				log.Printf("%s\n", body)
 			}
 		}
 		return nil
