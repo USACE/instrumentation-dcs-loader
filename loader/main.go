@@ -44,11 +44,15 @@ type Config struct {
 // This function helps local testing against minio as an s3 stand-in
 // where endpoint must be defined
 func (cfg *Config) AWSS3Config() *aws.Config {
-	awsConfig := aws.NewConfig().WithRegion(cfg.AWSS3Region)
+	awsConfig := aws.NewConfig()
 
 	// Used for "minio" during development
 	awsConfig.WithDisableSSL(cfg.AWSS3DisableSSL)
 	awsConfig.WithS3ForcePathStyle(cfg.AWSS3ForcePathStyle)
+
+	if cfg.AWSS3Region != "" {
+		awsConfig.WithRegion(cfg.AWSS3Region)
+	}
 	if cfg.AWSS3Endpoint != "" {
 		awsConfig.WithEndpoint(cfg.AWSS3Endpoint)
 	}
@@ -59,7 +63,10 @@ func (cfg *Config) AWSS3Config() *aws.Config {
 // AWSSQSConfig returns a ready-to-go config for session.New() for SQS Actions.
 // Supports local testing using SQS stand-in elasticmq
 func (cfg *Config) AWSSQSConfig() *aws.Config {
-	awsConfig := aws.NewConfig().WithRegion(cfg.AWSSQSRegion)
+	awsConfig := aws.NewConfig()
+	if cfg.AWSSQSRegion != "" {
+		awsConfig.WithRegion(cfg.AWSSQSRegion)
+	}
 	if cfg.AWSSQSEndpoint != "" {
 		awsConfig.WithEndpoint(cfg.AWSSQSEndpoint)
 	}
