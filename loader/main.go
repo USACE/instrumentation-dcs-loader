@@ -223,6 +223,10 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
+	// Handler
+	handler := HandleRequest(&cfg)
+
+	// SQS Session
 	sessSQS := session.New(cfg.AWSSQSConfig())
 	svcSQS := sqs.New(sessSQS)
 
@@ -230,10 +234,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	fmt.Println(queueURL)
 	if queueURL == "" {
 		log.Fatal("Could not find queue url")
 	}
+
+	// Single memory location to be reused by all for loop iterations
+	var e events.S3Event
+	pe := &e
 
 	for {
 		fmt.Println("Calling Receive Messages...")
@@ -250,13 +257,24 @@ func main() {
 			WaitTimeSeconds:     aws.Int64(20),
 		})
 		if err != nil {
-			fmt.Println(err.Error())
+			fmt.Printf("Error: %s\n", err.Error())
 			continue
 		}
 
 		fmt.Printf("Received %d messages\n", len(output.Messages))
 		for _, m := range output.Messages {
 			fmt.Printf("Working on Message: %s\nMessage Body:\n%s\n", *m.MessageId, *m.Body)
+
+			if err := json.Unmarshal([]byte(*m.Body), pe); err != nil {
+				fmt.Printf("Error: %s\n", err.Error())
+				continue
+			}
+
+			// Handle Message
+			if err := handler(context.Background(), *pe); err != nil {
+				fmt.Printf("Error: %s\n", err.Error())
+				continue
+			}
 
 			svcSQS.DeleteMessage(&sqs.DeleteMessageInput{
 				QueueUrl:      &queueURL,
