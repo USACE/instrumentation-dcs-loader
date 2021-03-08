@@ -19,26 +19,31 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sqs"
 )
 
-// Config holds parameters parsed from env variables
+// Config holds parameters parsed from env variables.
+// Note awsSQSQueueURL private variable. Public method is AWSSQSQueueURL()
 type Config struct {
 	PostURL             string `envconfig:"POST_URL"`
 	APIKey              string `envconfig:"API_KEY"`
-	AWSS3Endpoint       string `envconfig:"AWS_S3_ENDPOINT"`
 	AWSS3Region         string `envconfig:"AWS_S3_REGION"`
+	AWSS3Endpoint       string `envconfig:"AWS_S3_ENDPOINT"`
 	AWSS3DisableSSL     bool   `envconfig:"AWS_S3_DISABLE_SSL"`
 	AWSS3ForcePathStyle bool   `envconfig:"AWS_S3_FORCE_PATH_STYLE"`
+	AWSSQSRegion        string `envconfig:"AWS_SQS_REGION"`
+	AWSSQSEndpoint      string `envconfig:"AWS_SQS_ENDPOINT"`
+	awsSQSQueueURL      string `envconfig:"AWS_SQS_QUEUE_URL"`
+	AWSSQSQueueName     string `envconfig:"AWS_SQS_QUEUE_NAME"`
 }
 
-// AWSConfig returns a ready-to-go config to pass to session.New()
+// AWSS3Config returns a ready-to-go config to pass to session.New() for S3
 // This function helps local testing against minio as an s3 stand-in
 // where endpoint must be defined
-func (cfg *Config) AWSConfig() *aws.Config {
+func (cfg *Config) AWSS3Config() *aws.Config {
 	awsConfig := aws.NewConfig().WithRegion(cfg.AWSS3Region)
 
 	// Used for "minio" during development
@@ -51,6 +56,34 @@ func (cfg *Config) AWSConfig() *aws.Config {
 	return awsConfig
 }
 
+// AWSSQSConfig returns a ready-to-go config for session.New() for SQS Actions.
+// Supports local testing using SQS stand-in elasticmq
+func (cfg *Config) AWSSQSConfig() *aws.Config {
+	awsConfig := aws.NewConfig().WithRegion(cfg.AWSSQSRegion)
+	if cfg.AWSSQSEndpoint != "" {
+		awsConfig.WithEndpoint(cfg.AWSSQSEndpoint)
+	}
+	if cfg.AWSSQSRegion != "" {
+		awsConfig.WithRegion(cfg.AWSSQSRegion)
+	}
+	return awsConfig
+}
+
+// AWSSQSQueueURL returns the QueueUrl for interacting with SQS
+func (cfg *Config) AWSSQSQueueURL(s *sqs.SQS) (string, error) {
+	// If environment variable AWS_SQS_QUEUE_URL is specified,
+	// use provided queue URL without question
+	if cfg.awsSQSQueueURL != "" {
+		return cfg.awsSQSQueueURL, nil
+	}
+	// Lookup Queue URL from AWS_SQS_QUEUE_NAME
+	urlResult, err := s.GetQueueUrl(&sqs.GetQueueUrlInput{QueueName: &cfg.AWSSQSQueueName})
+	if err != nil {
+		return "", err
+	}
+	return *urlResult.QueueUrl, nil
+}
+
 // HandlerFunc allows currying HandleRequest
 type HandlerFunc func(context.Context, events.S3Event) error
 
@@ -60,7 +93,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 
 		for _, record := range s3Event.Records {
 
-			sess := session.New(cfg.AWSConfig())
+			sess := session.New(cfg.AWSS3Config())
 			s3Client := s3.New(sess)
 
 			bucket, key := &record.S3.Bucket.Name, &record.S3.Object.Key
@@ -69,9 +102,10 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				Key:    key,
 			})
 			if err != nil {
+				log.Println(err.Error())
 				return err
 			}
-			log.Printf("Processing File; bucket: %s; key: %s\n", *bucket, *key)
+			fmt.Printf("Processing File; bucket: %s; key: %s\n", *bucket, *key)
 
 			// Parse CSV Rows
 			reader := csv.NewReader(output.Body)
@@ -157,7 +191,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				log.Fatalf("\n\t*** Error; %s\n", err.Error())
 			}
 			if resp.StatusCode == 201 {
-				log.Printf(
+				fmt.Printf(
 					"\n\tSUCCESS; POST %d measurements across %d timeseries in %f seconds\n",
 					mCount, len(cc), time.Since(startPostTime).Seconds(),
 				)
@@ -165,7 +199,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				fmt.Printf("\n\t*** Error; Status Code: %d ***\n", resp.StatusCode)
 				body, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
-					log.Println("Error reading response body")
+					fmt.Println("Error reading response body")
 					log.Fatalln(err.Error())
 				}
 				log.Fatalf("%s\n", body)
@@ -181,5 +215,46 @@ func main() {
 	if err := envconfig.Process("loader", &cfg); err != nil {
 		log.Fatal(err.Error())
 	}
-	lambda.Start(HandleRequest(&cfg))
+
+	sessSQS := session.New(cfg.AWSSQSConfig())
+	svcSQS := sqs.New(sessSQS)
+
+	queueURL, err := cfg.AWSSQSQueueURL(svcSQS)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	fmt.Println(queueURL)
+	if queueURL == "" {
+		log.Fatal("Could not find queue url")
+	}
+
+	for {
+		fmt.Println("Calling Receive Messages...")
+		output, err := svcSQS.ReceiveMessage(&sqs.ReceiveMessageInput{
+			AttributeNames: []*string{
+				aws.String(sqs.MessageSystemAttributeNameSentTimestamp),
+			},
+			MessageAttributeNames: []*string{
+				aws.String(sqs.QueueAttributeNameAll),
+			},
+			QueueUrl:            &queueURL,
+			MaxNumberOfMessages: aws.Int64(1),
+			VisibilityTimeout:   aws.Int64(30),
+			WaitTimeSeconds:     aws.Int64(20),
+		})
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+
+		fmt.Printf("Received %d messages\n", len(output.Messages))
+		for _, m := range output.Messages {
+			fmt.Printf("Working on Message: %s\nMessage Body:\n%s\n", *m.MessageId, *m.Body)
+
+			svcSQS.DeleteMessage(&sqs.DeleteMessageInput{
+				QueueUrl:      &queueURL,
+				ReceiptHandle: m.MessageId,
+			})
+		}
+	}
 }
