@@ -278,7 +278,7 @@ func main() {
 			}
 
 			// Unmarshal Message to SNSEvent
-			if err := json.Unmarshal([]byte(*pSNSEvt.Message), pS3Evt); err != nil {
+			if err := json.Unmarshal([]byte(pSNSEvt.Message), pS3Evt); err != nil {
 				fmt.Printf("Error: %s\n", err.Error())
 				continue
 			}
