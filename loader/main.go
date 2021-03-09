@@ -269,7 +269,7 @@ func main() {
 
 		fmt.Printf("Received %d messages\n", len(output.Messages))
 		for _, m := range output.Messages {
-			fmt.Printf("Working on Message: %s; Message Body: %s\n", *m.MessageId, *m.Body)
+			fmt.Printf("Working on Message: %s", *m.MessageId)
 
 			// Unmarshal entire message body into SNS Entity
 			if err := json.Unmarshal([]byte(*m.Body), pSNSEvt); err != nil {
