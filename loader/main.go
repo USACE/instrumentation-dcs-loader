@@ -240,9 +240,13 @@ func main() {
 		log.Fatal("Could not find queue url")
 	}
 
-	// Single memory location to be reused by all for loop iterations
-	var e events.S3Event
-	pe := &e
+	// Single memory locations to be reused by all for loop iterations
+	// sns
+	var SNSEvt events.SNSEntity
+	pSNSEvt := &SNSEvt
+	// s3
+	var S3Evt events.S3Event
+	pS3Evt := &S3Evt
 
 	for {
 		fmt.Println("Calling Receive Messages...")
@@ -265,15 +269,22 @@ func main() {
 
 		fmt.Printf("Received %d messages\n", len(output.Messages))
 		for _, m := range output.Messages {
-			fmt.Printf("Working on Message: %s\nMessage Body:\n%s\n", *m.MessageId, *m.Body)
+			fmt.Printf("Working on Message: %s; Message Body: %s\n", *m.MessageId, *m.Body)
 
-			if err := json.Unmarshal([]byte(*m.Body), pe); err != nil {
+			// Unmarshal entire message body into SNS Entity
+			if err := json.Unmarshal([]byte(*m.Body), pSNSEvt); err != nil {
+				fmt.Printf("Error: %s\n", err.Error())
+				continue
+			}
+
+			// Unmarshal Message to SNSEvent
+			if err := json.Unmarshal([]byte(*pSNSEvt.Message), pS3Evt); err != nil {
 				fmt.Printf("Error: %s\n", err.Error())
 				continue
 			}
 
 			// Handle Message
-			if err := handler(context.Background(), *pe); err != nil {
+			if err := handler(context.Background(), *pS3Evt); err != nil {
 				fmt.Printf("Error: %s\n", err.Error())
 				continue
 			}
