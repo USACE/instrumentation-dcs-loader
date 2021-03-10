@@ -249,7 +249,6 @@ func main() {
 	pS3Evt := &S3Evt
 
 	for {
-		time.Sleep(time.Second * 5)
 		fmt.Println("Calling Receive Messages...")
 		output, err := svcSQS.ReceiveMessage(&sqs.ReceiveMessageInput{
 			AttributeNames: []*string{

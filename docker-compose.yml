@@ -21,6 +21,7 @@ services:
       - AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
       - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
       - AWS_DEFAULT_REGION=us-east-1
+      - AWS_REGION=us-east-1
       - LOADER_POST_URL=http://instrumentation-api_api_1/instrumentation/timeseries_measurements
       - LOADER_API_KEY=appkey
       - LOADER_AWS_S3_ENDPOINT=http://minio:9000
