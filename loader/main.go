@@ -249,6 +249,7 @@ func main() {
 	pS3Evt := &S3Evt
 
 	for {
+		time.Sleep(time.Second * 5)
 		fmt.Println("Calling Receive Messages...")
 		output, err := svcSQS.ReceiveMessage(&sqs.ReceiveMessageInput{
 			AttributeNames: []*string{
@@ -269,7 +270,7 @@ func main() {
 
 		fmt.Printf("Received %d messages\n", len(output.Messages))
 		for _, m := range output.Messages {
-			fmt.Printf("Working on Message: %s", *m.MessageId)
+			fmt.Printf("Working on Message: %s\n", *m.MessageId)
 
 			// Unmarshal entire message body into SNS Entity
 			if err := json.Unmarshal([]byte(*m.Body), pSNSEvt); err != nil {
