@@ -104,18 +104,18 @@ func HandleRequest(cfg *Config) HandlerFunc {
 			s3Client := s3.New(sess)
 
 			bucket, key := &record.S3.Bucket.Name, &record.S3.Object.Key
-			output, err := s3Client.GetObject(&s3.GetObjectInput{
-				Bucket: bucket,
-				Key:    key,
-			})
+			fmt.Printf("Processing File; bucket: %s; key: %s\n", *bucket, *key)
+
+			output, err := s3Client.GetObject(&s3.GetObjectInput{Bucket: bucket, Key: key})
 			if err != nil {
 				log.Println(err.Error())
 				return err
 			}
-			fmt.Printf("Processing File; bucket: %s; key: %s\n", *bucket, *key)
 
 			// Parse CSV Rows
+			defer output.Body.Close()
 			reader := csv.NewReader(output.Body)
+
 			rows := make([][]string, 0)
 			for {
 				row, err := reader.Read()
