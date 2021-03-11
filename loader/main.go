@@ -185,6 +185,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 			if err != nil {
 				return err
 			}
+			defer r.Body.Close()
 
 			// Add Headers
 			r.Header.Add("Content-Type", "application/json")
@@ -198,6 +199,7 @@ func HandleRequest(cfg *Config) HandlerFunc {
 				log.Printf("\n\t*** Error; %s\n", err.Error())
 				return err
 			}
+			defer resp.Body.Close()
 
 			if resp.StatusCode == 201 {
 				fmt.Printf(
